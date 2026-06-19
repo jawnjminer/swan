@@ -49,28 +49,32 @@ export function generateABP(t: number, sys: number, dia: number, hr: number): nu
   const amplitude = sys - dia
   const offset = dia
 
-  // Systolic rise (fast upstroke)
-  if (phase < 0.12) {
-    const x = phase / 0.12
-    return offset + amplitude * (x < 0.5 ? x * 2 : 1) * 0.7
+  // Anacrotic upstroke — sharp, near-vertical rise to the systolic peak.
+  if (phase < 0.10) {
+    const x = phase / 0.10
+    // Ease-out so the very top rounds into the peak rather than a corner.
+    return offset + amplitude * Math.sin((Math.PI / 2) * x)
   }
 
-  // Systolic peak
-  if (phase < 0.18) {
-    const x = (phase - 0.12) / 0.06
-    return offset + amplitude * (1 - 0.3 * Math.sin(Math.PI * x))
+  // Rounded systolic peak, beginning the gentle decline toward the notch.
+  if (phase < 0.22) {
+    const x = (phase - 0.10) / 0.12
+    // Smooth fall from 1.0 -> ~0.55 (the pre-notch shoulder).
+    return offset + amplitude * (1.0 - 0.45 * (0.5 - 0.5 * Math.cos(Math.PI * x)))
   }
 
-  // Dichrotic notch
-  if (phase < 0.25) {
-    const x = (phase - 0.18) / 0.07
-    return offset + amplitude * (0.75 - 0.15 * Math.sin(Math.PI * x))
+  // Dicrotic notch — a brief dip, then the small dicrotic wave rebound.
+  if (phase < 0.30) {
+    const x = (phase - 0.22) / 0.08
+    // Dip to ~0.45 at the notch, rebound to a small ~0.58 dicrotic peak.
+    const notch = 0.55 - 0.12 * Math.sin(Math.PI * x)
+    return offset + amplitude * notch
   }
 
-  // Diastolic decay
+  // Diastolic runoff — smooth, rounded exponential decay back to diastole.
   if (phase < 1.0) {
-    const x = (phase - 0.25) / 0.75
-    return offset + amplitude * 0.7 * Math.exp(-3 * x)
+    const x = (phase - 0.30) / 0.70
+    return offset + amplitude * 0.5 * Math.exp(-2.6 * x)
   }
 
   return offset
@@ -100,24 +104,33 @@ export function generatePA(t: number, sys: number, dia: number, hr: number, wedg
     return mean + amp * 0.2
   }
 
-  // Normal PA — similar to ABP but lower amplitude
-  const amplitude = (sys - dia) * 0.85
+  // Normal PA — lower, more rounded than ABP, with a soft systolic peak
+  // and a clear dicrotic notch on the descent (pulmonary valve closure).
+  const amplitude = sys - dia
   const offset = dia
 
-  if (phase < 0.10) {
-    return offset + amplitude * (phase / 0.10) * 0.8
+  // Gentle systolic upstroke (slower / more rounded than arterial).
+  if (phase < 0.14) {
+    const x = phase / 0.14
+    return offset + amplitude * Math.sin((Math.PI / 2) * x)
   }
-  if (phase < 0.16) {
-    const x = (phase - 0.10) / 0.06
-    return offset + amplitude * (0.8 + 0.2 * Math.sin(Math.PI * x))
+
+  // Broad, rounded systolic peak.
+  if (phase < 0.30) {
+    const x = (phase - 0.14) / 0.16
+    return offset + amplitude * (1.0 - 0.35 * (0.5 - 0.5 * Math.cos(Math.PI * x)))
   }
-  if (phase < 0.22) {
-    const x = (phase - 0.16) / 0.06
-    return offset + amplitude * (1.0 - 0.25 * Math.sin(Math.PI * x))
+
+  // Dicrotic notch and small rebound.
+  if (phase < 0.40) {
+    const x = (phase - 0.30) / 0.10
+    return offset + amplitude * (0.55 - 0.12 * Math.sin(Math.PI * x))
   }
+
+  // Diastolic runoff.
   if (phase < 1.0) {
-    const x = (phase - 0.22) / 0.78
-    return offset + amplitude * 0.75 * Math.exp(-3 * x)
+    const x = (phase - 0.40) / 0.60
+    return offset + amplitude * 0.5 * Math.exp(-2.4 * x)
   }
   return offset
 }
@@ -127,19 +140,36 @@ export function generateCVP(t: number, mean: number, hr: number): number {
   const phase = (t % beatDuration) / beatDuration
   const amp = 3
 
-  // a wave
-  if (phase >= 0.05 && phase < 0.15) {
-    return mean + amp * 0.7 * Math.sin(Math.PI * (phase - 0.05) / 0.10)
+  // a wave — atrial contraction (tallest positive deflection).
+  if (phase < 0.14) {
+    return mean + amp * 0.85 * Math.sin(Math.PI * phase / 0.14)
   }
-  // c wave
-  if (phase >= 0.20 && phase < 0.25) {
-    return mean + amp * 0.4 * Math.sin(Math.PI * (phase - 0.20) / 0.05)
+  // x descent — atrial relaxation, dips below mean.
+  if (phase < 0.20) {
+    const x = (phase - 0.14) / 0.06
+    return mean - amp * 0.25 * Math.sin(Math.PI * x)
   }
-  // v wave
-  if (phase >= 0.55 && phase < 0.75) {
-    return mean + amp * 0.6 * Math.sin(Math.PI * (phase - 0.55) / 0.20)
+  // c wave — tricuspid bulge during early ventricular systole (small bump).
+  if (phase < 0.30) {
+    const x = (phase - 0.20) / 0.10
+    return mean + amp * 0.45 * Math.sin(Math.PI * x)
   }
-  return mean + amp * 0.15
+  // x' descent — continued systolic atrial relaxation (lowest point).
+  if (phase < 0.48) {
+    const x = (phase - 0.30) / 0.18
+    return mean - amp * 0.45 * Math.sin(Math.PI * x)
+  }
+  // v wave — atrial filling against a closed tricuspid valve.
+  if (phase < 0.74) {
+    const x = (phase - 0.48) / 0.26
+    return mean + amp * 0.7 * Math.sin(Math.PI * x)
+  }
+  // y descent — tricuspid opens, atrium empties, settles back to baseline.
+  if (phase < 1.0) {
+    const x = (phase - 0.74) / 0.26
+    return mean - amp * 0.2 * Math.sin(Math.PI * x)
+  }
+  return mean
 }
 
 export function generatePleth(t: number, hr: number, _spo2: number, quality: string): number {
