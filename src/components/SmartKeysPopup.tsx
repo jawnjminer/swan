@@ -14,6 +14,11 @@ export default function SmartKeysPopup({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
+  const openInstructor = () => {
+    setScreen('control')
+    onClose()
+  }
+
   const keys: SmartKey[] = [
     { label: 'Realtime Report', icon: '🖨' },
     { label: 'Veni Puncture', icon: '💉' },
@@ -24,6 +29,7 @@ export default function SmartKeysPopup({ onClose }: { onClose: () => void }) {
     { label: 'NBP STAT', icon: '🩺' },
     { label: 'Stop All NBP', icon: '⊘' },
     { label: 'Monitor Standby', icon: '⏻' },
+    { label: 'Instructor', icon: '⚙', onClick: openInstructor },
     { label: 'Wedge', icon: '⊐', onClick: openWedge },
     { label: '', icon: '' },
     { label: 'Calcs', icon: '▦' },
@@ -52,14 +58,19 @@ export default function SmartKeysPopup({ onClose }: { onClose: () => void }) {
               key={i}
               onClick={k.onClick}
               disabled={!k.label}
-              className={`h-20 flex flex-col items-center justify-center gap-1 border-r border-b border-neutral-700 ${
+              className={`relative h-20 flex flex-col items-center justify-center gap-1 border-r border-b border-neutral-700 ${
                 k.label ? 'hover:bg-neutral-700' : 'cursor-default'
-              } ${k.label === 'Wedge' ? 'bg-neutral-700/60' : ''}`}
+              } ${k.label === 'Wedge' ? 'bg-neutral-700/60' : ''} ${k.label === 'Instructor' ? 'border-t-2 border-red-500 bg-red-950/30 hover:bg-red-900/40' : ''}`}
             >
               {k.label && (
                 <>
                   <span className="text-lg text-neutral-300 leading-none">{k.icon}</span>
                   <span className="text-[10px] text-neutral-200 text-center leading-tight px-1">{k.label}</span>
+                  {k.label === 'Instructor' && (
+                    <span className="absolute top-1 right-1 text-[8px] font-mono font-bold text-red-400 bg-red-950/80 px-1 rounded">
+                      INST.
+                    </span>
+                  )}
                 </>
               )}
             </button>
