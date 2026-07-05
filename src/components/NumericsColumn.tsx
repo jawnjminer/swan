@@ -1,5 +1,4 @@
 import { useVitalStore } from '../stores/vitalStore'
-import { useUIStore } from '../stores/uiStore'
 import { calculateMAP, calculatePAMean } from '../utils/waveformGenerator'
 
 const C = {
@@ -18,7 +17,7 @@ export default function NumericsColumn() {
   const vitals = useVitalStore(s => s.vitals)
   const disconnect = useVitalStore(s => s.disconnect)
   const limits = useVitalStore(s => s.alarmLimits)
-  const savedPAWP = useUIStore(s => s.savedPAWP)
+  const savedPawp = useVitalStore(s => s.vitals.savedPawp)
 
   const map = calculateMAP(vitals.abpSys, vitals.abpDia)
   const paMean = calculatePAMean(vitals.papSys, vitals.papDia)
@@ -76,9 +75,9 @@ export default function NumericsColumn() {
       </Block>
 
       {/* PAWP (saved) */}
-      {savedPAWP !== null && (
+      {savedPawp !== null && (
         <Block label="PAWP" color={C.pap} full>
-          <Big color={C.pap}>{savedPAWP}</Big>
+          <Big color={C.pap}>{savedPawp}</Big>
         </Block>
       )}
 

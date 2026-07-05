@@ -1,7 +1,11 @@
 import { create } from 'zustand'
-import type { Vitals, DisconnectState, AlarmLimits, Rhythm, SignalQuality } from '../types/vitals'
+import type {
+  Vitals, DisconnectState, AlarmLimits, Rhythm, SignalQuality,
+  DisconnectChannel, ScenarioId,
+} from '../types/vitals'
+import { getScenario } from '../utils/scenarios'
 
-const BASELINE: Vitals = {
+export const BASELINE_VITALS: Vitals = {
   heartRate: 78,
   rhythm: 'normal-sinus',
   stSegment: 0,
@@ -27,9 +31,10 @@ const BASELINE: Vitals = {
   wedgeInflated: false,
   wedgeBreathCount: 0,
   wedgeBreathsRequired: 3,
+  savedPawp: null,
 }
 
-export const useVitalStore = create<{
+interface VitalStore {
   vitals: Vitals
   disconnect: DisconnectState
   alarmLimits: AlarmLimits
@@ -43,25 +48,28 @@ export const useVitalStore = create<{
   setSignalQuality: (q: SignalQuality) => void
   setRespRate: (rate: number) => void
   setEtCO2: (val: number) => void
-  setDisconnect: (ch: keyof DisconnectState, val: boolean) => void
+  setDisconnect: (ch: DisconnectChannel, val: boolean) => void
   setAlarmLimit: (key: keyof AlarmLimits, val: number) => void
 
-  inflateWedge: () => void
+  beginWedge: () => void
   deflateWedge: () => void
   incrementBreath: () => void
   resetBreathCount: () => void
 
-  setWedgeState: (inflated: boolean) => void
+  savePawp: (val: number) => void
+  clearSavedPawp: () => void
 
   startNBP: () => void
-  zeroTransducer: (ch: 'art' | 'pa' | 'cvp' | 'all') => void
+  zeroTransducer: (ch: DisconnectChannel | 'all') => void
 
-  resetToBaseline: () => void
-  loadScenario: (scenario: Partial<Vitals> & { disconnect?: Partial<DisconnectState> }) => void
+  resetToBaseline: (opts?: { clearPawp?: boolean }) => void
+  applyScenario: (id: ScenarioId) => void
 
   getBaseline: () => Vitals
-}>((set, get) => ({
-  vitals: { ...BASELINE },
+}
+
+export const useVitalStore = create<VitalStore>((set, get) => ({
+  vitals: { ...BASELINE_VITALS },
   disconnect: { art: false, pa: false, cvp: false },
   alarmLimits: {
     hrHigh: 130,
@@ -92,7 +100,7 @@ export const useVitalStore = create<{
     alarmLimits: { ...s.alarmLimits, [key]: val }
   })),
 
-  inflateWedge: () => set((s) => ({
+  beginWedge: () => set((s) => ({
     vitals: { ...s.vitals, wedgeInflated: true }
   })),
 
@@ -108,15 +116,19 @@ export const useVitalStore = create<{
     vitals: { ...s.vitals, wedgeBreathCount: 0 }
   })),
 
-  setWedgeState: (inflated) => set((s) => ({
-    vitals: { ...s.vitals, wedgeInflated: inflated }
+  savePawp: (val) => set((s) => ({
+    vitals: { ...s.vitals, savedPawp: val }
+  })),
+
+  clearSavedPawp: () => set((s) => ({
+    vitals: { ...s.vitals, savedPawp: null }
   })),
 
   startNBP: () => {
     set((s) => ({ vitals: { ...s.vitals, nbpStatus: 'measuring' } }))
     setTimeout(() => {
       const s = get().vitals
-      // NBP correlates loosely with arterial line
+      // NBP correlates loosely with arterial line.
       const sys = s.abpSys + Math.round((Math.random() - 0.5) * 8)
       const dia = s.abpDia + Math.round((Math.random() - 0.5) * 6)
       const map = Math.round(dia + (sys - dia) / 3)
@@ -131,15 +143,35 @@ export const useVitalStore = create<{
     return { disconnect: { ...s.disconnect, [ch]: false } }
   }),
 
-  resetToBaseline: () => set({
-    vitals: { ...BASELINE },
+  resetToBaseline: (opts) => set((s) => ({
+    vitals: {
+      ...BASELINE_VITALS,
+      // PAWP persists across reset unless explicitly cleared (clinical reality:
+      // the recorded wedge value is the point of the exercise).
+      savedPawp: opts?.clearPawp ? null : s.vitals.savedPawp,
+    },
     disconnect: { art: false, pa: false, cvp: false }
-  }),
-
-  loadScenario: (scenario) => set((s) => ({
-    vitals: { ...s.vitals, ...scenario },
-    disconnect: scenario.disconnect ? { ...s.disconnect, ...scenario.disconnect } : s.disconnect
   })),
 
-  getBaseline: () => ({ ...BASELINE }),
+  applyScenario: (id) => {
+    // Normal == return to baseline. The 'normal' scenario has an empty
+    // vitals partial by design (it's the reference point), so an implicit
+    // merge would be a no-op. Be explicit.
+    if (id === 'normal') {
+      set((s) => ({
+        vitals: { ...BASELINE_VITALS, savedPawp: s.vitals.savedPawp },
+        disconnect: { art: false, pa: false, cvp: false },
+      }))
+      return
+    }
+    set((s) => {
+      const def = getScenario(id)
+      return {
+        vitals: { ...s.vitals, ...def.vitals },
+        disconnect: def.disconnect ? { ...s.disconnect, ...def.disconnect } : s.disconnect,
+      }
+    })
+  },
+
+  getBaseline: () => ({ ...BASELINE_VITALS }),
 }))

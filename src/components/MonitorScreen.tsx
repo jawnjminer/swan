@@ -24,13 +24,20 @@ export default function MonitorScreen() {
   const showWedge = screen === 'wedge' || screen === 'edit-wedge'
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white overflow-hidden relative">
-      <StatusBar />
+    <div className="flex items-center justify-center h-screen w-screen bg-black overflow-hidden">
+      {/* Patient display: width is locked to 2× the height (matches the real
+          Philips landscape screen). Scales to fit whichever dimension is the
+          binding constraint of the viewport. */}
+      <div
+        className="flex flex-col bg-black text-white overflow-hidden relative"
+        style={{ aspectRatio: '2 / 1', width: 'min(100vw, 200vh)', height: 'min(50vw, 100vh)' }}
+      >
+        <StatusBar />
 
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Waveform area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Main content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Waveform area */}
+          <div className="flex-1 flex flex-col min-w-0">
           <WaveRow label="II" sublabel="M" color={COLORS.ecg} cal="1mV" rightLabel="Sinus Tach">
             <WaveformCanvas type="ecg" color={COLORS.ecg} height={68} yMin={-5} yMax={30} />
           </WaveRow>
@@ -62,15 +69,19 @@ export default function MonitorScreen() {
             </div>
             <NBPReadout />
           </div>
+
+          {/* PAWP (saved) — yellow strip below waveforms per Q14 */}
+          <SavedPawpStrip />
+          </div>
+
+          <NumericsColumn />
         </div>
 
-        <NumericsColumn />
+        <BottomToolbar onMore={() => setShowSmartKeys(true)} />
+
+        {showSmartKeys && <SmartKeysPopup onClose={() => setShowSmartKeys(false)} />}
+        {showWedge && <WedgeWindow />}
       </div>
-
-      <BottomToolbar onMore={() => setShowSmartKeys(true)} />
-
-      {showSmartKeys && <SmartKeysPopup onClose={() => setShowSmartKeys(false)} />}
-      {showWedge && <WedgeWindow />}
     </div>
   )
 }
@@ -115,6 +126,21 @@ function WaveRow({ label, sublabel, color, cal, scale, rightLabel, children }: {
         )}
         {children}
       </div>
+    </div>
+  )
+}
+
+function SavedPawpStrip() {
+  const savedPawp = useVitalStore(s => s.vitals.savedPawp)
+  if (savedPawp === null) return null
+  return (
+    <div className="px-2 py-1 flex items-center gap-3 border-t border-neutral-900">
+      <div className="flex flex-col">
+        <span className="text-[11px] font-semibold" style={{ color: '#ffdd33' }}>PAWP</span>
+        <span className="text-[9px] text-neutral-500">saved</span>
+      </div>
+      <span className="text-4xl font-mono font-bold" style={{ color: '#ffdd33' }}>{savedPawp}</span>
+      <span className="text-sm font-mono text-neutral-500 mt-3">mmHg</span>
     </div>
   )
 }

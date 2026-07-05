@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Enforces AGENTS.md commit convention for mx750-monitor-simulator.
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+subject=$(head -1 "$1")
+pattern='^(feat|fix|chore|docs|merge): .+'
+
+if ! [[ "$subject" =~ $pattern ]]; then
+  echo "commit rejected: subject must match $pattern"
+  echo "  got: $subject"
+  echo "  examples: 'feat: SpO2 numeric tile' | 'fix: retrace overshoot' | 'chore: bump vite'"
+  exit 1
+fi

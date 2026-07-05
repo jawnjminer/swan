@@ -139,7 +139,7 @@ function LiveWedgeContent() {
 
 function EditWedgeContent() {
   const vitals = useVitalStore(s => s.vitals)
-  const savePAWP = useUIStore(s => s.savePAWP)
+  const savePawp = useVitalStore(s => s.savePawp)
   const setScreen = useUIStore(s => s.setScreen)
   const [cursorY, setCursorY] = useState(50)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -227,7 +227,7 @@ function EditWedgeContent() {
           <span className="text-xs text-neutral-400">Adjust cursor to the mean</span>
         </div>
         <button
-          onClick={() => { savePAWP(value); setScreen('monitor') }}
+          onClick={() => { savePawp(value); setScreen('monitor') }}
           className="px-6 py-2 rounded bg-green-600 text-white text-sm font-bold hover:bg-green-700"
         >
           Save Wedge
