@@ -69,6 +69,9 @@ export default function MonitorScreen() {
             </div>
             <NBPReadout />
           </div>
+
+          {/* PAWP (saved) — yellow strip below waveforms per Q14 */}
+          <SavedPawpStrip />
           </div>
 
           <NumericsColumn />
@@ -123,6 +126,21 @@ function WaveRow({ label, sublabel, color, cal, scale, rightLabel, children }: {
         )}
         {children}
       </div>
+    </div>
+  )
+}
+
+function SavedPawpStrip() {
+  const savedPawp = useVitalStore(s => s.vitals.savedPawp)
+  if (savedPawp === null) return null
+  return (
+    <div className="px-2 py-1 flex items-center gap-3 border-t border-neutral-900">
+      <div className="flex flex-col">
+        <span className="text-[11px] font-semibold" style={{ color: '#ffdd33' }}>PAWP</span>
+        <span className="text-[9px] text-neutral-500">saved</span>
+      </div>
+      <span className="text-4xl font-mono font-bold" style={{ color: '#ffdd33' }}>{savedPawp}</span>
+      <span className="text-sm font-mono text-neutral-500 mt-3">mmHg</span>
     </div>
   )
 }
