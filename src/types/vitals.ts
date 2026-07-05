@@ -1,5 +1,8 @@
 export type Rhythm = 'normal-sinus' | 'afib' | 'svt' | 'v-tach' | 'v-fib' | 'asystole'
 export type SignalQuality = 'good' | 'fair' | 'poor'
+export type DisconnectChannel = 'art' | 'pa' | 'cvp'
+
+export type ScenarioId = 'normal' | 'cardiogenic-shock' | 'severe-pe' | 'septic-shock'
 
 export interface Vitals {
   heartRate: number
@@ -35,6 +38,10 @@ export interface Vitals {
   wedgeInflated: boolean
   wedgeBreathCount: number
   wedgeBreathsRequired: number
+
+  // PAWP is patient data (last successfully measured wedge pressure) and lives
+  // here rather than uiStore so it survives resetToBaseline by default.
+  savedPawp: number | null
 }
 
 export interface DisconnectState {
@@ -55,7 +62,13 @@ export interface AlarmLimits {
 }
 
 export type AlarmType = 'warning' | 'critical'
-export type AlarmSeverity = 'hr-high' | 'hr-low' | 'abp-high' | 'abp-low' | 'pap-high' | 'spo2-low' | 'resp-high' | 'resp-low' | 'art-disconnect' | 'pa-disconnect' | 'cvp-disconnect'
+export type AlarmSeverity =
+  | 'hr-high' | 'hr-low'
+  | 'abp-high' | 'abp-low'
+  | 'pap-high'
+  | 'spo2-low'
+  | 'resp-high' | 'resp-low'
+  | 'art-disconnect' | 'pa-disconnect' | 'cvp-disconnect'
 
 export interface ActiveAlarm {
   id: string
@@ -68,3 +81,5 @@ export interface ActiveAlarm {
 
 export type WedgeState = 'normal' | 'inflating' | 'wedged' | 'post-wedge' | 'editing' | 'saved'
 export type Screen = 'monitor' | 'wedge' | 'edit-wedge' | 'control'
+
+export type InstructorView = 'compact' | 'full'
