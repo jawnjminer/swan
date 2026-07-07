@@ -32,6 +32,9 @@ export const BASELINE_VITALS: Vitals = {
   wedgeBreathCount: 0,
   wedgeBreathsRequired: 3,
   savedPawp: null,
+  abpDampened: false,
+  ecgLeadsOff: false,
+  paOverWedged: false,
 }
 
 interface VitalStore {
