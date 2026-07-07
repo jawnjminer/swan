@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import type {
   Vitals, DisconnectState, AlarmLimits, Rhythm, SignalQuality,
-  DisconnectChannel, ScenarioId,
+  DisconnectChannel, ScenarioId, EventId, TweenState,
 } from '../types/vitals'
 import { getScenario } from '../utils/scenarios'
+import { EVENT_TABLE } from '../utils/events'
+import { broadcastState, type SimulationState } from '../utils/supabase'
 
 export const BASELINE_VITALS: Vitals = {
   heartRate: 78,
@@ -41,6 +43,7 @@ interface VitalStore {
   vitals: Vitals
   disconnect: DisconnectState
   alarmLimits: AlarmLimits
+  tween: TweenState | null
 
   setHR: (hr: number) => void
   setRhythm: (r: Rhythm) => void
@@ -68,12 +71,42 @@ interface VitalStore {
   resetToBaseline: (opts?: { clearPawp?: boolean }) => void
   applyScenario: (id: ScenarioId) => void
 
+  // Quick events + gradual transitions
+  fireEvent: (id: EventId, durationMs: number) => void
+  cancelTween: () => void
+
+  // Cross-device sync
+  setVitalsFromRemote: (state: SimulationState) => void
+
   getBaseline: () => Vitals
+}
+
+// ─── Broadcast role ────────────────────────────────────────────────────────
+// Only the instructor console broadcasts. The bedside monitor is a pure
+// subscriber; if it also broadcast, remote updates would echo back in a loop.
+// The ControlPanel calls enableBroadcasting() on mount.
+let _isBroadcaster = false
+let _applyingRemote = false
+
+export function enableBroadcasting() { _isBroadcaster = true }
+
+// ─── Module-level tween engine ─────────────────────────────────────────────
+// Kept outside Zustand so the 60fps RAF loop doesn't churn React state — we
+// only push to the store (and broadcast) on a ~100ms cadence.
+let _rafId: number | null = null
+
+function _cancelRaf() {
+  if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null }
+}
+
+function _lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * Math.min(Math.max(t, 0), 1)
 }
 
 export const useVitalStore = create<VitalStore>((set, get) => ({
   vitals: { ...BASELINE_VITALS },
   disconnect: { art: false, pa: false, cvp: false },
+  tween: null,
   alarmLimits: {
     hrHigh: 130,
     hrLow: 50,
@@ -176,5 +209,136 @@ export const useVitalStore = create<VitalStore>((set, get) => ({
     })
   },
 
+  fireEvent: (id, durationMs) => {
+    const def = EVENT_TABLE[id]
+    if (!def) return
+    _cancelRaf()
+
+    const current = get().vitals
+
+    // Split target fields: non-numeric snap immediately; numeric interpolate.
+    const snapFields: Partial<Vitals> = {}
+    const tweenStart: Partial<Vitals> = {}
+    const tweenTarget: Partial<Vitals> = {}
+
+    if (def.vitals) {
+      for (const key of Object.keys(def.vitals) as (keyof Vitals)[]) {
+        const val = def.vitals[key]
+        if (typeof val === 'number') {
+          ;(tweenStart as Record<string, number>)[key] = current[key] as number
+          ;(tweenTarget as Record<string, number>)[key] = val
+        } else {
+          ;(snapFields as Record<string, unknown>)[key] = val
+        }
+      }
+    }
+
+    // Disconnects always snap.
+    if (def.disconnect) {
+      set((s) => ({ disconnect: { ...s.disconnect, ...def.disconnect } }))
+    }
+
+    // Apply the snap fields (rhythm, booleans) immediately.
+    if (Object.keys(snapFields).length > 0) {
+      set((s) => ({ vitals: { ...s.vitals, ...snapFields } }))
+    }
+
+    const hasTween = Object.keys(tweenTarget).length > 0
+
+    // Instant, or nothing to interpolate → apply targets now and finish.
+    if (durationMs === 0 || !hasTween) {
+      if (hasTween) set((s) => ({ vitals: { ...s.vitals, ...tweenTarget } }))
+      set(() => ({ tween: null }))
+      _broadcast(get)
+      return
+    }
+
+    const startTime = Date.now()
+    set(() => ({
+      tween: {
+        active: true,
+        eventLabel: def.label,
+        startValues: tweenStart,
+        targetValues: tweenTarget,
+        startTime,
+        durationMs,
+        remainingMs: durationMs,
+      },
+    }))
+
+    let lastTick = 0
+    const step = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / durationMs, 1)
+
+      const interp: Partial<Vitals> = {}
+      for (const key of Object.keys(tweenTarget) as (keyof Vitals)[]) {
+        const a = (tweenStart as Record<string, number>)[key]
+        const b = (tweenTarget as Record<string, number>)[key]
+        ;(interp as Record<string, number>)[key] = Math.round(_lerp(a, b, progress))
+      }
+
+      const now = Date.now()
+      if (now - lastTick >= 100 || progress >= 1) {
+        lastTick = now
+        set((s) => ({
+          vitals: { ...s.vitals, ...interp },
+          tween: s.tween ? { ...s.tween, remainingMs: Math.max(0, durationMs - elapsed) } : null,
+        }))
+        _broadcast(get)
+      }
+
+      if (progress < 1) {
+        _rafId = requestAnimationFrame(step)
+      } else {
+        set(() => ({ tween: null }))
+        _rafId = null
+      }
+    }
+    _rafId = requestAnimationFrame(step)
+  },
+
+  cancelTween: () => {
+    _cancelRaf()
+    set(() => ({ tween: null }))
+    _broadcast(get)
+  },
+
+  setVitalsFromRemote: (state) => {
+    _applyingRemote = true
+    set(() => ({
+      vitals: state.vitals,
+      disconnect: state.disconnect,
+      alarmLimits: state.alarmLimits,
+    }))
+    _applyingRemote = false
+  },
+
   getBaseline: () => ({ ...BASELINE_VITALS }),
 }))
+
+/** Broadcast current simulation state to any subscribed bedside monitors. */
+function _broadcast(get: () => VitalStore) {
+  if (!_isBroadcaster || _applyingRemote) return
+  const s = get()
+  broadcastState({ vitals: s.vitals, disconnect: s.disconnect, alarmLimits: s.alarmLimits })
+}
+
+// Instructor-authoritative broadcast: any change to the shared simulation
+// state (vitals / disconnect / alarmLimits) is pushed to subscribers. The
+// broadcast helper is internally throttled (~10Hz) and no-ops when sync is
+// not configured or when this client is not the broadcaster (bedside).
+useVitalStore.subscribe((state, prev) => {
+  if (!_isBroadcaster || _applyingRemote) return
+  if (
+    state.vitals !== prev.vitals ||
+    state.disconnect !== prev.disconnect ||
+    state.alarmLimits !== prev.alarmLimits
+  ) {
+    broadcastState({
+      vitals: state.vitals,
+      disconnect: state.disconnect,
+      alarmLimits: state.alarmLimits,
+    })
+  }
+})
