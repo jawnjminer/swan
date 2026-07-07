@@ -89,6 +89,7 @@ let _isBroadcaster = false
 let _applyingRemote = false
 
 export function enableBroadcasting() { _isBroadcaster = true }
+export function isBroadcaster() { return _isBroadcaster }
 
 // ─── Module-level tween engine ─────────────────────────────────────────────
 // Kept outside Zustand so the 60fps RAF loop doesn't churn React state — we

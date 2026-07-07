@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { useVitalStore } from '../stores/vitalStore'
+import { useEffect, useState } from 'react'
+import { useVitalStore, isBroadcaster } from '../stores/vitalStore'
 import { useUIStore } from '../stores/uiStore'
+import { fetchSnapshot, subscribeToState } from '../utils/supabase'
 import WaveformCanvas from './WaveformCanvas'
 import StatusBar from './StatusBar'
 import NumericsColumn from './NumericsColumn'
@@ -19,9 +20,25 @@ const COLORS = {
 
 export default function MonitorScreen() {
   const screen = useUIStore(s => s.screen)
+  const setVitalsFromRemote = useVitalStore(s => s.setVitalsFromRemote)
   const [showSmartKeys, setShowSmartKeys] = useState(false)
 
   const showWedge = screen === 'wedge' || screen === 'edit-wedge'
+
+  // Bedside sync: hydrate from the last snapshot, then track live instructor
+  // broadcasts. Skip entirely if this client is the instructor console (it
+  // owns the authoritative state and must not overwrite it with echoes).
+  useEffect(() => {
+    if (isBroadcaster()) return
+    let cancelled = false
+    fetchSnapshot().then(state => {
+      if (state && !cancelled && !isBroadcaster()) setVitalsFromRemote(state)
+    })
+    const unsubscribe = subscribeToState(state => {
+      if (!isBroadcaster()) setVitalsFromRemote(state)
+    })
+    return () => { cancelled = true; unsubscribe() }
+  }, [setVitalsFromRemote])
 
   return (
     <div className="flex items-center justify-center h-screen w-screen bg-black overflow-hidden">
