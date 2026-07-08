@@ -2,6 +2,21 @@
 
 ## v2
 
+### fix: continuous waveform sweep + hide Rhythm quick-events
+
+- **Waveform continuity fix.** Instructor changes (and gradual-transition
+  ticks) no longer blank/restart the bedside trace. The animation loop reads
+  live vitals from refs and depends on canvas geometry only, so the sweep
+  runs uninterrupted and new morphology/values appear at the sweep bar —
+  matching a real bedside monitor. Previously any change tore down the loop,
+  reset the sweep clock, and re-entered the 5s boot blank.
+- **Rhythm quick-events section hidden.** The one-click Rhythm buttons are
+  removed from the instructor panel (afib/svt/v-tach currently render normal-
+  sinus morphology at a different rate rather than the correct waveform shape;
+  per-rhythm ECG morphology is deferred). The manual Vitals→ECG rhythm
+  dropdown remains. Re-enable by adding 'rhythm' back to CATEGORY_ORDER.
+
+
 ### feat: quick events, gradual transitions, cross-device sync
 
 - **25 one-click clinical events** across Hemodynamic / Rhythm / Monitoring,

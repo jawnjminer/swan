@@ -136,7 +136,12 @@ export const EVENT_ORDER: Record<EventCategory, EventId[]> = {
   ],
 }
 
-export const CATEGORY_ORDER: EventCategory[] = ['hemodynamic', 'rhythm', 'monitoring']
+// NOTE: 'rhythm' is intentionally omitted here so the Rhythm quick-events
+// section is hidden from the UI. The rhythm EVENT_TABLE entries, EVENT_ORDER
+// list, and ECG generator branches all remain in place — re-add 'rhythm' to
+// this array to restore the section once the ECG morphology per rhythm is
+// fully implemented. The manual Vitals→ECG rhythm dropdown is unaffected.
+export const CATEGORY_ORDER: EventCategory[] = ['hemodynamic', 'monitoring']
 
 export const CATEGORY_LABEL: Record<EventCategory, string> = {
   hemodynamic: 'Hemodynamic',

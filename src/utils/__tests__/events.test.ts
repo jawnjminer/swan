@@ -25,9 +25,19 @@ describe('EVENT_ORDER / EVENT_TABLE', () => {
   })
 
   it('EVENT_ORDER references every key in EVENT_TABLE exactly once', () => {
-    const ordered = CATEGORY_ORDER.flatMap(c => EVENT_ORDER[c])
+    // All EVENT_ORDER lists (including the hidden rhythm group) still cover
+    // the full table — hiding a section only removes it from CATEGORY_ORDER,
+    // not from the underlying data.
+    const allCats = Object.keys(EVENT_ORDER) as (keyof typeof EVENT_ORDER)[]
+    const ordered = allCats.flatMap(c => EVENT_ORDER[c])
     const tableKeys = Object.keys(EVENT_TABLE) as EventId[]
     expect(ordered.slice().sort()).toEqual(tableKeys.slice().sort())
+  })
+
+  it('CATEGORY_ORDER hides the rhythm section (hemodynamic + monitoring only)', () => {
+    expect(CATEGORY_ORDER).toEqual(['hemodynamic', 'monitoring'])
+    // The rhythm data still exists even though it is not surfaced.
+    expect(EVENT_ORDER.rhythm.length).toBeGreaterThan(0)
   })
 
   it('hemodynamic numeric vitals are within plausible physiological ranges', () => {
