@@ -164,7 +164,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
 
         switch (type) {
           case 'ecg': {
-            value = generateECG(tt, vitals.heartRate, vitals.rhythm) * (yRange * 0.8) + (yMax * 0.4)
+            value = generateECG(tt, vitals.heartRate, vitals.rhythm, vitals.ecgLeadsOff) * (yRange * 0.8) + (yMax * 0.4)
             value = ((value - yMin) / yRange) * h
             value = h - value
             break
@@ -175,7 +175,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
               value = h - (0.05 * h)
               strokeColor = '#ff6666'
             } else {
-              const raw = generateABP(tt, vitals.abpSys, vitals.abpDia, vitals.heartRate)
+              const raw = generateABP(tt, vitals.abpSys, vitals.abpDia, vitals.heartRate, vitals.abpDampened)
               value = ((raw - yMin) / yRange) * h
               value = h - value
               strokeColor = color
@@ -188,7 +188,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
               value = h - (0.05 * h)
               strokeColor = '#ffcc66'
             } else {
-              const raw = generatePA(tt, vitals.papSys, vitals.papDia, vitals.heartRate, vitals.wedgeInflated)
+              const raw = generatePA(tt, vitals.papSys, vitals.papDia, vitals.heartRate, vitals.wedgeInflated, vitals.paOverWedged)
               const scaled = raw * wedgeScale
               value = ((scaled - yMin) / (yRange * wedgeScale)) * h
               value = h - value
@@ -242,7 +242,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
     return () => {
       cancelAnimationFrame(animationRef.current)
     }
-  }, [type, color, height, yMin, yMax, wedgeScale, vitals.heartRate, vitals.rhythm, vitals.abpSys, vitals.abpDia, vitals.papSys, vitals.papDia, vitals.cvpMean, vitals.spo2, vitals.signalQuality, vitals.respRate, vitals.etco2, vitals.wedgeInflated, disconnect, wedgeScale])
+  }, [type, color, height, yMin, yMax, wedgeScale, vitals.heartRate, vitals.rhythm, vitals.abpSys, vitals.abpDia, vitals.papSys, vitals.papDia, vitals.cvpMean, vitals.spo2, vitals.signalQuality, vitals.respRate, vitals.etco2, vitals.wedgeInflated, vitals.abpDampened, vitals.ecgLeadsOff, vitals.paOverWedged, disconnect, wedgeScale])
 
   return (
     <canvas

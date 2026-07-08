@@ -1,7 +1,43 @@
 // Waveform generation utilities for MX750 simulator
 
 // Time in seconds, returns normalized amplitude 0-1
-export function generateECG(t: number, hr: number, rhythm: string): number {
+export function generateECG(t: number, hr: number, rhythm: string, ecgLeadsOff = false): number {
+  // Leads-off: flat baseline with low-amplitude electrical noise.
+  if (ecgLeadsOff) return 0.1 + Math.random() * 0.04
+
+  // Atrial flutter — 300 bpm sawtooth F-waves with 2:1-style conduction.
+  // The ventricular QRS fires at `hr`; the F-waves run independently at 300.
+  if (rhythm === 'atrial-flutter') {
+    const atrialBeat = 60 / 300
+    const aPhase = (t % atrialBeat) / atrialBeat
+    // Sawtooth: slow ramp up, fast drop.
+    const fWave = aPhase < 0.7 ? (aPhase / 0.7) * 0.22 : (1 - aPhase) / 0.3 * 0.22
+    const ventBeat = 60 / hr
+    const vPhase = (t % ventBeat) / ventBeat
+    if (vPhase >= 0.22 && vPhase < 0.28) {
+      const x = (vPhase - 0.22) / 0.06
+      return (x < 0.5 ? x * 2 : (1 - x) * 2) + fWave * 0.3
+    }
+    return fWave
+  }
+
+  // Complete heart block — dissociated P-waves (~75 bpm) and a slow, wide
+  // ventricular escape rhythm at `hr` (~35 bpm). No fixed PR relationship.
+  if (rhythm === 'complete-heart-block') {
+    const pBeat = 60 / 75
+    const pPhase = (t % pBeat) / pBeat
+    const pWave = (pPhase >= 0.05 && pPhase < 0.15)
+      ? 0.12 * Math.sin(Math.PI * (pPhase - 0.05) / 0.10)
+      : 0
+    const qrsBeat = 60 / hr
+    const qrsPhase = (t % qrsBeat) / qrsBeat
+    if (qrsPhase >= 0.20 && qrsPhase < 0.35) {
+      const x = (qrsPhase - 0.20) / 0.15  // wide QRS
+      return pWave + (x < 0.5 ? x * 2 : (1 - x) * 2) * 0.9
+    }
+    return pWave
+  }
+
   const beatDuration = 60 / hr
   const phase = (t % beatDuration) / beatDuration // 0-1 per beat
 
@@ -42,9 +78,17 @@ export function generateECG(t: number, hr: number, rhythm: string): number {
   return 0
 }
 
-export function generateABP(t: number, sys: number, dia: number, hr: number): number {
+export function generateABP(t: number, sys: number, dia: number, hr: number, dampened = false): number {
   const beatDuration = 60 / hr
   const phase = (t % beatDuration) / beatDuration
+
+  // Dampened arterial line — narrow pulse pressure, rounded sinusoid, no
+  // dicrotic notch. Underlying sys/dia unchanged; only the trace flattens.
+  if (dampened) {
+    const amp = (sys - dia) * 0.20
+    const dampOffset = dia + (sys - dia) * 0.55
+    return dampOffset + amp * Math.sin(Math.PI * phase)
+  }
 
   const amplitude = sys - dia
   const offset = dia
@@ -80,9 +124,17 @@ export function generateABP(t: number, sys: number, dia: number, hr: number): nu
   return offset
 }
 
-export function generatePA(t: number, sys: number, dia: number, hr: number, wedged: boolean): number {
+export function generatePA(t: number, sys: number, dia: number, hr: number, wedged: boolean, overWedged = false): number {
   const beatDuration = 60 / hr
   const phase = (t % beatDuration) / beatDuration
+
+  // Over-wedged — balloon too distal, occludes a branch. High, flat trace
+  // approximating LVEDP with only slight respiratory variation, no phasic
+  // pulse. This is the safety-teaching morphology (recognize before rupture).
+  if (overWedged) {
+    const mean = dia + (sys - dia) * 0.85
+    return mean + 0.5 * Math.sin((t % 4) * Math.PI / 4)  // slow respiratory drift
+  }
 
   if (wedged) {
     // PAWP morphology — flattened, rounded, with a/c/v wave appearance

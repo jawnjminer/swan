@@ -1,30 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useVitalStore } from '../stores/vitalStore'
+import { useVitalStore, enableBroadcasting } from '../stores/vitalStore'
 import { useUIStore } from '../stores/uiStore'
 import type { Rhythm, SignalQuality } from '../types/vitals'
-import { SCENARIO_ORDER, SCENARIO_TABLE } from '../utils/scenarios'
 import { evaluateAlarms, isCritical } from '../utils/alarmThresholds'
+import QuickEventsSection from './QuickEventsSection'
 
 const RHYTHMS: { value: Rhythm; label: string }[] = [
   { value: 'normal-sinus', label: 'Normal Sinus' },
   { value: 'afib', label: 'A-Fib' },
+  { value: 'atrial-flutter', label: 'A-Flutter' },
   { value: 'svt', label: 'SVT' },
   { value: 'v-tach', label: 'V-Tach' },
   { value: 'v-fib', label: 'V-Fib' },
   { value: 'asystole', label: 'Asystole' },
+  { value: 'complete-heart-block', label: 'Complete HB' },
 ]
 
-type AccordionKey = 'scenarios' | 'ecg' | 'abp' | 'pa' | 'cvp' | 'spo2' | 'resp' | 'wedge' | 'disconnect' | 'alarms'
+type AccordionKey = 'ecg' | 'abp' | 'pa' | 'cvp' | 'spo2' | 'resp' | 'wedge' | 'disconnect' | 'alarms'
 
 const PANEL_GROUPS: { title: string; keys: AccordionKey[] }[] = [
-  { title: 'Setup', keys: ['scenarios'] },
   { title: 'Vitals', keys: ['ecg', 'abp', 'pa', 'cvp', 'spo2', 'resp'] },
   { title: 'Procedure', keys: ['wedge', 'disconnect'] },
   { title: 'Alarms', keys: ['alarms'] },
 ]
 
 const DEFAULT_OPEN: Record<AccordionKey, boolean> = {
-  scenarios: true, ecg: false, abp: false, pa: false, cvp: false,
+  ecg: false, abp: false, pa: false, cvp: false,
   spo2: false, resp: false, wedge: true, disconnect: false, alarms: false,
 }
 
@@ -41,6 +42,12 @@ export default function ControlPanel() {
     setOpen(o => ({ ...o, [k]: !o[k] }))
   }
 
+  // This client is the instructor console → it owns the authoritative state
+  // and broadcasts changes to any connected bedside monitor.
+  useEffect(() => {
+    enableBroadcasting()
+  }, [])
+
   const activeAlarms = useMemo(
     () => evaluateAlarms(vitals, alarmLimits, disconnect),
     [vitals, alarmLimits, disconnect],
@@ -52,11 +59,7 @@ export default function ControlPanel() {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) return
-      if (e.key === '1') store.applyScenario('normal')
-      else if (e.key === '2') store.applyScenario('cardiogenic-shock')
-      else if (e.key === '3') store.applyScenario('severe-pe')
-      else if (e.key === '4') store.applyScenario('septic-shock')
-      else if (e.key === 'r' || e.key === 'R') store.resetToBaseline()
+      if (e.key === 'r' || e.key === 'R') store.resetToBaseline()
       else if (e.key === ' ') {
         e.preventDefault()
         if (vitals.wedgeInflated) store.deflateWedge()
@@ -103,6 +106,16 @@ export default function ControlPanel() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
         <LiveStateBadge />
 
+        {/* Quick Events — topmost, highest-priority reach during a live sim */}
+        <section>
+          <h2 className="text-[10px] font-mono font-bold text-mx-text-dim mb-2 uppercase tracking-widest">
+            Quick Events
+          </h2>
+          <div className="bg-mx-panel border border-mx-border rounded-lg p-3">
+            <QuickEventsSection />
+          </div>
+        </section>
+
         {PANEL_GROUPS.map(group => (
           <section key={group.title}>
             <h2 className="text-[10px] font-mono font-bold text-mx-text-dim mb-2 uppercase tracking-widest">
@@ -110,8 +123,6 @@ export default function ControlPanel() {
             </h2>
             <div className="space-y-2">
               {group.keys.map(key => {
-                if (key === 'scenarios')
-                  return <ScenarioAccordion key={key} open={open[key]} onToggle={() => toggle(key)} onLoad={(id) => store.applyScenario(id)} />
                 if (key === 'ecg')
                   return <Accordion key={key} title="ECG" open={open[key]} onToggle={() => toggle(key)}>
                     <NumInput label="HR (bpm)" value={vitals.heartRate} min={30} max={200} onChange={store.setHR} />
@@ -250,35 +261,6 @@ function LiveStateBadge() {
       )}
       {silenced && <span className="text-[10px] font-mono text-yellow-400">⏸ alarms silenced</span>}
     </div>
-  )
-}
-
-function ScenarioAccordion({ open, onToggle, onLoad }: {
-  open: boolean; onToggle: () => void;
-  onLoad: (id: keyof typeof SCENARIO_TABLE) => void
-}) {
-  return (
-    <Panel title="Scenarios" open={open} onToggle={onToggle}>
-      <ul className="divide-y divide-mx-border">
-        {SCENARIO_ORDER.map(id => {
-          const s = SCENARIO_TABLE[id]
-          return (
-            <li key={id} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white">{s.label}</div>
-                <p className="text-xs text-mx-text-dim leading-snug mt-0.5">{s.description}</p>
-              </div>
-              <button
-                onClick={() => onLoad(id)}
-                className="px-3 py-1 rounded text-xs font-mono bg-mx-border hover:bg-cyan-700 border border-mx-border"
-              >
-                Load
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </Panel>
   )
 }
 
@@ -487,7 +469,6 @@ function ToggleInput({ label, value, onChange, hint }: {
 
 function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
-    ['1–4', 'Load scenario (Normal, Cardiogenic, Severe PE, Septic)'],
     ['R', 'Reset to Baseline'],
     ['Space', 'Begin or deflate wedge'],
     ['?', 'Toggle this help'],
