@@ -50,18 +50,32 @@ Realtime:
 - A transition banner shows `⟳ Transitioning to <event> — Ns remaining`
   with a Cancel button.
 
-## 25 quick events
+## Quick events
 
 **Hemodynamic (7):** Hypotension, Hypertension, Hemorrhage, Vasodilatory
 Shock, Cardiogenic Shock, Septic Shock, Severe PE.
 
-**Rhythm (9):** Sinus Tachycardia, Sinus Bradycardia, Atrial Fibrillation,
-Atrial Flutter, SVT, Ventricular Tachycardia, Ventricular Fibrillation,
-Asystole, Complete Heart Block.
-
 **Monitoring (9):** Art Line Dampened/Restored, PA Wedged, PA Over-Wedged,
 PA Deflated, SpO₂ Probe Off/Restored, ECG Leads Off/Restored. The five
 "engaged" states highlight orange on their buttons when active.
+
+**Rhythm — hidden (deferred).** A 9-event Rhythm group exists in the data
+(`EVENT_TABLE` / `EVENT_ORDER.rhythm`) but is not surfaced: it is omitted
+from `CATEGORY_ORDER`. It was hidden because afib/svt/v-tach currently
+render normal-sinus ECG morphology at a different rate rather than the
+correct waveform shape. Re-add `'rhythm'` to `CATEGORY_ORDER` to restore
+the section once per-rhythm morphology is implemented. The manual
+Vitals→ECG rhythm dropdown is unaffected and still works.
+
+## Waveform rendering
+
+The bedside sweep runs continuously and is never restarted by a state
+change. `WaveformCanvas` reads live vitals/disconnect from refs and its
+render effect depends on canvas geometry only. When the instructor fires
+an event, the new morphology and values appear at the sweep bar and to its
+immediate left — the trace to the right (older history) is overwritten as
+the bar comes back around, exactly like a real monitor. It does **not**
+blank and redraw the whole strip.
 
 ## Five new waveform behaviors
 

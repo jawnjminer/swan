@@ -36,6 +36,14 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
 
   const vitals = useVitalStore(s => s.vitals)
   const disconnect = useVitalStore(s => s.disconnect)
+
+  // Live refs so the animation loop always reads the latest state WITHOUT
+  // being torn down and restarted on every change. Restarting the effect
+  // would reset the sweep clock and re-enter the boot blank — which is
+  // exactly the "waveform erases completely" bug. Instead the loop keeps
+  // running and new morphology/values simply appear at the sweep bar.
+  const vitalsRef = useRef(vitals)
+  vitalsRef.current = vitals
   disconnectRef.current = disconnect
 
   useEffect(() => {
@@ -95,12 +103,13 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
 
         // Flat baseline y-position per channel (no generator call — we
         // want a true flat line at the resting value, not a noisy preview).
+        const vr = vitalsRef.current
         let baselineY: number
         switch (type) {
           case 'ecg':   baselineY = h - ((0 - yMin) / yRange) * h; break
-          case 'abp':   baselineY = h - ((vitals.abpDia - yMin) / yRange) * h; break
-          case 'pap':   baselineY = h - ((vitals.papDia * wedgeScale - yMin) / (yRange * wedgeScale)) * h; break
-          case 'cvp':   baselineY = h - ((vitals.cvpMean - yMin) / yRange) * h; break
+          case 'abp':   baselineY = h - ((vr.abpDia - yMin) / yRange) * h; break
+          case 'pap':   baselineY = h - ((vr.papDia * wedgeScale - yMin) / (yRange * wedgeScale)) * h; break
+          case 'cvp':   baselineY = h - ((vr.cvpMean - yMin) / yRange) * h; break
           case 'pleth': baselineY = h - ((0.2 * (yRange * 0.7) + yMin + yRange * 0.1 - yMin) / yRange) * h; break
           case 'resp':  baselineY = h - ((0.3 * (yRange * 0.8) + yMin + yRange * 0.1 - yMin) / yRange) * h; break
         }
@@ -153,6 +162,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
       }
 
       // Draw the trace continuously across the entire strip.
+      const v = vitalsRef.current
       ctx!.beginPath()
       let pathStarted = false
       for (let i = 0; i < samples; i++) {
@@ -164,7 +174,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
 
         switch (type) {
           case 'ecg': {
-            value = generateECG(tt, vitals.heartRate, vitals.rhythm, vitals.ecgLeadsOff) * (yRange * 0.8) + (yMax * 0.4)
+            value = generateECG(tt, v.heartRate, v.rhythm, v.ecgLeadsOff) * (yRange * 0.8) + (yMax * 0.4)
             value = ((value - yMin) / yRange) * h
             value = h - value
             break
@@ -175,7 +185,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
               value = h - (0.05 * h)
               strokeColor = '#ff6666'
             } else {
-              const raw = generateABP(tt, vitals.abpSys, vitals.abpDia, vitals.heartRate, vitals.abpDampened)
+              const raw = generateABP(tt, v.abpSys, v.abpDia, v.heartRate, v.abpDampened)
               value = ((raw - yMin) / yRange) * h
               value = h - value
               strokeColor = color
@@ -188,7 +198,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
               value = h - (0.05 * h)
               strokeColor = '#ffcc66'
             } else {
-              const raw = generatePA(tt, vitals.papSys, vitals.papDia, vitals.heartRate, vitals.wedgeInflated, vitals.paOverWedged)
+              const raw = generatePA(tt, v.papSys, v.papDia, v.heartRate, v.wedgeInflated, v.paOverWedged)
               const scaled = raw * wedgeScale
               value = ((scaled - yMin) / (yRange * wedgeScale)) * h
               value = h - value
@@ -202,7 +212,7 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
               value = h - (0.05 * h)
               strokeColor = '#6699ff'
             } else {
-              const raw = generateCVP(tt, vitals.cvpMean, vitals.heartRate)
+              const raw = generateCVP(tt, v.cvpMean, v.heartRate)
               value = ((raw - yMin) / yRange) * h
               value = h - value
               strokeColor = color
@@ -210,14 +220,14 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
             break
           }
           case 'pleth': {
-            const raw = generatePleth(tt, vitals.heartRate, vitals.spo2, vitals.signalQuality)
+            const raw = generatePleth(tt, v.heartRate, v.spo2, v.signalQuality)
             value = raw * (yRange * 0.7) + (yMin + yRange * 0.1)
             value = ((value - yMin) / yRange) * h
             value = h - value
             break
           }
           case 'resp': {
-            const raw = generateResp(tt, vitals.respRate, vitals.etco2)
+            const raw = generateResp(tt, v.respRate, v.etco2)
             value = raw * (yRange * 0.8) + (yMin + yRange * 0.1)
             value = ((value - yMin) / yRange) * h
             value = h - value
@@ -242,7 +252,11 @@ export default function WaveformCanvas({ type, color, height, yMin, yMax, wedgeS
     return () => {
       cancelAnimationFrame(animationRef.current)
     }
-  }, [type, color, height, yMin, yMax, wedgeScale, vitals.heartRate, vitals.rhythm, vitals.abpSys, vitals.abpDia, vitals.papSys, vitals.papDia, vitals.cvpMean, vitals.spo2, vitals.signalQuality, vitals.respRate, vitals.etco2, vitals.wedgeInflated, vitals.abpDampened, vitals.ecgLeadsOff, vitals.paOverWedged, disconnect, wedgeScale])
+    // Deps are geometry only. Live vitals/disconnect are read from refs inside
+    // the loop, so the animation is never torn down on a state change — the
+    // sweep runs continuously and new values appear at the bar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, color, height, yMin, yMax, wedgeScale])
 
   return (
     <canvas
