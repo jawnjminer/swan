@@ -1,0 +1,4 @@
+# Supabase CLI local artifacts — machine-specific, not for version control
+.branches
+.temp
+.env
