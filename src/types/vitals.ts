@@ -1,4 +1,6 @@
-export type Rhythm = 'normal-sinus' | 'afib' | 'svt' | 'v-tach' | 'v-fib' | 'asystole'
+export type Rhythm =
+  | 'normal-sinus' | 'afib' | 'svt' | 'v-tach' | 'v-fib' | 'asystole'
+  | 'atrial-flutter' | 'complete-heart-block'
 export type SignalQuality = 'good' | 'fair' | 'poor'
 export type DisconnectChannel = 'art' | 'pa' | 'cvp'
 
@@ -42,6 +44,12 @@ export interface Vitals {
   // PAWP is patient data (last successfully measured wedge pressure) and lives
   // here rather than uiStore so it survives resetToBaseline by default.
   savedPawp: number | null
+
+  // Waveform-appearance flags — alter morphology without changing the numeric
+  // physiology. Instructor-controlled monitoring events.
+  abpDampened: boolean    // narrow pulse pressure, rounded, no dicrotic notch
+  ecgLeadsOff: boolean    // flatline + electrical noise on the ECG channel
+  paOverWedged: boolean   // balloon over-inflated: flat high-pressure trace
 }
 
 export interface DisconnectState {
@@ -83,3 +91,30 @@ export type WedgeState = 'normal' | 'inflating' | 'wedged' | 'post-wedge' | 'edi
 export type Screen = 'monitor' | 'wedge' | 'edit-wedge' | 'control'
 
 export type InstructorView = 'compact' | 'full'
+
+// ─── Quick clinical events ─────────────────────────────────────────────────
+export type EventCategory = 'hemodynamic' | 'rhythm' | 'monitoring'
+
+export type EventId =
+  // Hemodynamic
+  | 'hypotension' | 'hypertension' | 'hemorrhage'
+  | 'vasodilatory-shock' | 'cardiogenic-shock' | 'septic-shock' | 'severe-pe'
+  // Rhythm
+  | 'sinus-tach' | 'sinus-brady' | 'afib' | 'atrial-flutter' | 'svt'
+  | 'v-tach' | 'v-fib' | 'asystole' | 'complete-heart-block'
+  // Monitoring
+  | 'art-dampened' | 'art-restored'
+  | 'pa-wedged' | 'pa-over-wedged' | 'pa-deflated'
+  | 'spo2-off' | 'spo2-restored'
+  | 'ecg-off' | 'ecg-restored'
+
+// ─── Gradual transition (tween) state ──────────────────────────────────────
+export interface TweenState {
+  active: boolean
+  eventLabel: string
+  startValues: Partial<Vitals>
+  targetValues: Partial<Vitals>
+  startTime: number   // Date.now() ms at start
+  durationMs: number  // total duration; 0 = instant
+  remainingMs: number // countdown for the banner
+}

@@ -10,3 +10,4 @@ dist
 *.log
 .gstack
 .hermes
+.vercel
